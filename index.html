@@ -50,7 +50,9 @@
             view: 'dashboard', // 'dashboard' หรือ 'manage_chapters'
             editingNovelId: null,
             activeNovelId: null, 
-            editingChapterId: null 
+            editingChapterId: null,
+            chapterCurrentPage: 1, // หน้าปัจจุบันของตารางตอน
+            chapterItemsPerPage: 50 // จำนวนตอนต่อหน้า
         };
 
         // --- 1. โหลดข้อมูล ---
@@ -241,7 +243,7 @@
         }
 
         // ==========================================
-        // UI: หน้าจัดการตอน (เฉพาะเรื่องที่เลือก) + ฟีเจอร์จัดเนื้อหา
+        // UI: หน้าจัดการตอน (เฉพาะเรื่องที่เลือก) + ฟีเจอร์จัดเนื้อหาและแบ่งหน้า
         // ==========================================
         function renderManageChapters() {
             const novel = novels.find(n => n.id === state.activeNovelId);
@@ -257,6 +259,21 @@
             // แปลง <br> กลับเป็นขึ้นบรรทัดใหม่สำหรับการแก้ไข
             const editContent = editingChapter ? editingChapter.content.replace(/<br>/g, '\n') : '';
 
+            // ---------------- Pagination Logic ----------------
+            const totalItems = novelChapters.length;
+            const totalPages = Math.ceil(totalItems / state.chapterItemsPerPage);
+            
+            if (state.chapterCurrentPage > totalPages && totalPages > 0) {
+                state.chapterCurrentPage = totalPages;
+            } else if (state.chapterCurrentPage < 1) {
+                state.chapterCurrentPage = 1;
+            }
+
+            const startIndex = (state.chapterCurrentPage - 1) * state.chapterItemsPerPage;
+            const endIndex = startIndex + state.chapterItemsPerPage;
+            const paginatedChapters = novelChapters.slice(startIndex, endIndex);
+
+            // ---------------- HTML จัดการตอน ----------------
             let chapterFormHtml = '';
             if (editMode && editingChapter) {
                 chapterFormHtml = `
@@ -303,9 +320,9 @@
                 `;
             }
 
-            let chapterTableHtml = novelChapters.length === 0 
-                ? `<tr><td colspan="3" class="p-8 text-center text-gray-500">ยังไม่มีตอนในนิยายเรื่องนี้</td></tr>` 
-                : novelChapters.map(ch => `
+            let chapterTableHtml = paginatedChapters.length === 0 
+                ? `<tr><td colspan="3" class="p-8 text-center text-gray-500">ยังไม่มีตอนในนิยายเรื่องนี้ (หรือในหน้านี้)</td></tr>` 
+                : paginatedChapters.map(ch => `
                 <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td class="p-4 text-center font-bold text-gray-600 w-20">ตอนที่ ${ch.chapterNumber}</td>
                     <td class="p-4 font-medium text-gray-800">${ch.title}</td>
@@ -315,6 +332,43 @@
                     </td>
                 </tr>
             `).join('');
+
+            // สร้าง UI แบ่งหน้า (Pagination Footer)
+            let paginationHtml = '';
+            if (totalPages > 1) {
+                let pageButtons = '';
+                let startPage = Math.max(1, state.chapterCurrentPage - 2);
+                let endPage = Math.min(totalPages, state.chapterCurrentPage + 2);
+
+                if (state.chapterCurrentPage > 1) {
+                    pageButtons += `<button onclick="changeChapterPage(${state.chapterCurrentPage - 1})" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm"><i class="fa-solid fa-chevron-left mr-1"></i> ก่อนหน้า</button>`;
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    if (i === state.chapterCurrentPage) {
+                        pageButtons += `<button class="px-3 py-1 bg-indigo-600 text-white border border-indigo-600 rounded text-sm font-bold shadow-sm">${i}</button>`;
+                    } else {
+                        pageButtons += `<button onclick="changeChapterPage(${i})" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm">${i}</button>`;
+                    }
+                }
+
+                if (state.chapterCurrentPage < totalPages) {
+                    pageButtons += `<button onclick="changeChapterPage(${state.chapterCurrentPage + 1})" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm">ถัดไป <i class="fa-solid fa-chevron-right ml-1"></i></button>`;
+                }
+
+                paginationHtml = `
+                    <div class="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-gray-200 bg-gray-50 gap-4">
+                        <div class="text-sm text-gray-500 font-medium">แสดง ${startIndex + 1} ถึง ${Math.min(endIndex, totalItems)} จากทั้งหมด ${totalItems} ตอน</div>
+                        <div class="flex gap-1 shadow-sm rounded">${pageButtons}</div>
+                    </div>
+                `;
+            } else if (totalItems > 0) {
+                 paginationHtml = `
+                    <div class="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
+                        <div class="text-sm text-gray-500 font-medium">แสดงทั้งหมด ${totalItems} ตอน</div>
+                    </div>
+                `;
+            }
 
             return `
                 <button onclick="goDashboard()" class="flex items-center gap-2 text-gray-500 hover:text-indigo-600 font-medium mb-6 transition-colors bg-white px-4 py-2 rounded-full shadow-sm w-fit border border-gray-100">
@@ -326,7 +380,7 @@
                     <img src="${novel.cover}" class="w-20 h-28 object-cover rounded-lg shadow-md" onerror="this.src='https://via.placeholder.com/150'">
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">${novel.title}</h1>
-                        <p class="text-gray-500"><i class="fa-solid fa-pen-nib mr-2"></i>ผู้แต่ง: ${novel.author} | มีทั้งหมด <span class="font-bold text-indigo-600">${novelChapters.length}</span> ตอน</p>
+                        <p class="text-gray-500"><i class="fa-solid fa-pen-nib mr-2"></i>ผู้แต่ง: ${novel.author} | มีทั้งหมด <span class="font-bold text-indigo-600">${totalItems}</span> ตอน</p>
                     </div>
                 </div>
 
@@ -337,11 +391,11 @@
                         </div>
                     </div>
                     <div class="lg:col-span-2">
-                        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
                             <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                                <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-list-ul text-green-600 mr-2"></i> รายการตอนทั้งหมด</h2>
+                                <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-list-ul text-green-600 mr-2"></i> รายการตอน (หน้า ${state.chapterCurrentPage})</h2>
                             </div>
-                            <div class="overflow-x-auto max-h-[700px] overflow-y-auto">
+                            <div class="overflow-x-auto overflow-y-auto" style="max-h: 600px;">
                                 <table class="w-full text-left border-collapse">
                                     <thead class="sticky top-0 bg-white shadow-sm z-10">
                                         <tr class="border-b border-gray-200 text-gray-500 text-sm">
@@ -353,6 +407,7 @@
                                     <tbody>${chapterTableHtml}</tbody>
                                 </table>
                             </div>
+                            ${paginationHtml}
                         </div>
                     </div>
                 </div>
@@ -398,10 +453,17 @@
             render();
         }
 
-        function manageNovelChapters(id) {
+        window.manageNovelChapters = function(id) {
             state.view = 'manage_chapters';
             state.activeNovelId = id;
             state.editingChapterId = null;
+            state.chapterCurrentPage = 1; // เริ่มที่หน้า 1 เสมอเมื่อเปิดเรื่องใหม่
+            render();
+        }
+
+        // เปลี่ยนหน้าตารางตอน
+        window.changeChapterPage = function(pageNumber) {
+            state.chapterCurrentPage = pageNumber;
             render();
         }
 
@@ -470,6 +532,12 @@
             };
             chapters.push(newChapter);
             state.editingChapterId = null;
+            
+            // หาว่าต้องแสดงหน้าไหนเพื่อให้เห็นตอนที่เพิ่งเพิ่มล่าสุด (ถ้าจัดเรียงตามเลขตอน)
+            const novelChapters = chapters.filter(c => c.novelId === state.activeNovelId).sort((a, b) => a.chapterNumber - b.chapterNumber);
+            const totalPages = Math.ceil(novelChapters.length / state.chapterItemsPerPage);
+            state.chapterCurrentPage = totalPages; // ย้ายไปหน้าสุดท้ายเพื่อดูตอนล่าสุด
+            
             render();
             syncToGoogleSheets({ action: 'addChapter', chapter: newChapter });
         }
