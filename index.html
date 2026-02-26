@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการนิยาย - Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }</style>
+</head>
+<body class="bg-gray-100 text-gray-900 min-h-screen">
+
+    <!-- Navbar -->
+    <header class="bg-indigo-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-user-shield text-2xl"></i>
+                <span class="text-xl font-bold">Admin Dashboard</span>
+                <span class="bg-indigo-700 text-xs px-2 py-1 rounded text-indigo-200">Google Sheets DB</span>
+            </div>
+            <!-- ปุ่มนี้ให้ใส่ลิงก์ไปยังเว็บหน้าคนอ่านของคุณ -->
+            <a href="#" class="px-4 py-2 bg-indigo-800 hover:bg-indigo-700 rounded-lg text-sm font-medium transition-colors">
+                <i class="fa-solid fa-eye"></i> ดูหน้าเว็บไซต์
+            </a>
+        </div>
+    </header>
+
+    <main id="admin-content" class="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="py-20 text-center text-gray-500" id="loading-state">
+            <i class="fa-solid fa-spinner fa-spin text-3xl mb-4"></i><br>กำลังเชื่อมต่อกับ Google Sheets...
+        </div>
+    </main>
+
+    <!-- แจ้งเตือนสถานะ -->
+    <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
+        <i class="fa-solid fa-circle-check text-green-400"></i>
+        <span id="toast-msg">สำเร็จ!</span>
+    </div>
+
+    <script>
+        // URL เชื่อมต่อกับ Google Apps Script ของคุณ
+        const GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbzA1ZXHWBEXuwp4Gmu8SEc9q8WKUYi33NA8t1AixdE8PF2rXfklGQ6H6Z6vxCW--39J/exec"; 
+
+        let novels = [];
+        let chapters = [];
+        let state = { editingNovelId: null };
+
+        // 1. โหลดข้อมูลตอนเริ่ม
+        async function loadData() {
+            try {
+                const res = await fetch(GOOGLE_SHEET_API_URL);
+                const data = await res.json();
+                
+                // แปลงหมวดหมู่ให้เป็น Array
+                novels = data.novels.map(n => ({
+                    ...n, 
+                    views: parseInt(n.views) || 0,
+                    categories: n.categories ? n.categories.toString().split(',').map(s => s.trim()) : []
+                }));
+                chapters = data.chapters || [];
+                
+                render();
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loading-state').innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500 text-3xl mb-4"></i><br>เกิดข้อผิดพลาดในการโหลดข้อมูล<br><span class="text-sm">โปรดตรวจสอบ URL ของ Google Sheets</span>';
+            }
+        }
+        
+        loadData();
+
+        // ฟังก์ชันแสดงแจ้งเตือนมุมขวาล่าง
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.innerHTML = isError 
+                ? `<i class="fa-solid fa-circle-xmark text-red-400"></i><span>${msg}</span>`
+                : `<i class="fa-solid fa-circle-check text-green-400"></i><span>${msg}</span>`;
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+        }
+
+        // ฟังก์ชันส่งข้อมูลไปบันทึกใน Excel
+        async function syncToGoogleSheets(payload) {
+            try {
+                showToast("กำลังบันทึกข้อมูล...");
+                const res = await fetch(GOOGLE_SHEET_API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                if(result.status === 'success') {
+                    showToast("บันทึกข้อมูลสำเร็จ!");
+                } else {
+                    showToast("เกิดข้อผิดพลาด: " + result.message, true);
+                }
+            } catch (e) {
+                console.error(e);
+                showToast("บันทึกไม่สำเร็จ ลองตรวจสอบอินเทอร์เน็ต", true);
+            }
+        }
+
+        // 2. ฟังก์ชันวาดหน้าจอ (Render UI)
+        function render() {
+            // สร้างตัวเลือกนิยายใน Dropdown เพิ่มตอน
+            let optionsHtml = novels.map(n => `<option value="${n.id}">${n.title}</option>`).join('');
+            
+            const editMode = state.editingNovelId !== null;
+            const editingNovel = editMode ? novels.find(n => n.id === state.editingNovelId) : null;
+
+            // --- ฟอร์มเพิ่ม/แก้ไขนิยาย ---
+            let novelFormHtml = '';
+            if (editMode && editingNovel) {
+                novelFormHtml = `
+                    <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3 text-yellow-600"><i class="fa-solid fa-pen-to-square"></i> แก้ไขนิยาย</h2>
+                    <form onsubmit="handleUpdateNovel(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">ชื่อเรื่อง</label>
+                            <input type="text" id="edit_novel_title" value="${editingNovel.title}" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">นามปากกา</label>
+                                <input type="text" id="edit_novel_author" value="${editingNovel.author}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">สถานะ</label>
+                                <select id="edit_novel_status" class="w-full border border-gray-300 rounded-lg p-2 bg-white outline-none">
+                                    <option value="ยังไม่จบ" ${editingNovel.status === 'ยังไม่จบ' ? 'selected' : ''}>ยังไม่จบ</option>
+                                    <option value="จบแล้ว" ${editingNovel.status === 'จบแล้ว' ? 'selected' : ''}>จบแล้ว</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">ลิงก์รููปปก</label>
+                            <input type="url" id="edit_novel_cover" value="${editingNovel.cover}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">หมวดหมู่</label>
+                            <input type="text" id="edit_novel_cat" value="${editingNovel.categories ? editingNovel.categories.join(', ') : ''}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">เรื่องย่อ</label>
+                            <textarea id="edit_novel_synopsis" rows="4" required class="w-full border border-gray-300 rounded-lg p-2 outline-none">${editingNovel.synopsis}</textarea>
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button type="submit" class="flex-1 bg-yellow-500 text-white font-bold py-3 rounded-lg hover:bg-yellow-600 transition-colors shadow-md">บันทึกการแก้ไข</button>
+                            <button type="button" onclick="cancelEditNovel()" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors">ยกเลิก</button>
+                        </div>
+                    </form>
+                `;
+            } else {
+                novelFormHtml = `
+                    <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3"><i class="fa-solid fa-book-medical text-indigo-600"></i> เพิ่มนิยายเรื่องใหม่</h2>
+                    <form onsubmit="handleAddNovel(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">ชื่อเรื่อง</label>
+                            <input type="text" id="add_novel_title" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">นามปากกา (ผู้แต่ง)</label>
+                            <input type="text" id="add_novel_author" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">ลิงก์รูปหน้าปก</label>
+                            <input type="url" id="add_novel_cover" placeholder="https://..." required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">หมวดหมู่ (คั่นด้วยลูกน้ำ เช่น ระบบ, แฟนตาซี)</label>
+                            <input type="text" id="add_novel_cat" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">เรื่องย่อ</label>
+                            <textarea id="add_novel_synopsis" rows="4" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors shadow-md">บันทึกนิยายเรื่องใหม่</button>
+                    </form>
+                `;
+            }
+
+            // --- ตารางแสดงนิยาย ---
+            let novelTableHtml = novels.length === 0 
+                ? `<tr><td colspan="5" class="p-8 text-center text-gray-500">ยังไม่มีนิยายในระบบ กรุณาเพิ่มนิยายเรื่องใหม่</td></tr>` 
+                : novels.map((n, idx) => `
+                <tr class="border-b border-gray-100 hover:bg-indigo-50 transition-colors">
+                    <td class="p-3 text-center text-gray-500">${idx + 1}</td>
+                    <td class="p-3">
+                        <div class="flex items-center gap-3">
+                            <img src="${n.cover}" class="w-10 h-14 object-cover rounded shadow-sm shrink-0" onerror="this.src='https://via.placeholder.com/150'">
+                            <div>
+                                <div class="font-bold text-gray-800 line-clamp-1">${n.title}</div>
+                                <div class="text-xs text-indigo-600 font-medium">${n.status}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3 text-gray-600 text-sm hidden sm:table-cell">${n.author}</td>
+                    <td class="p-3 text-center text-gray-600 text-sm hidden sm:table-cell">${(n.views || 0).toLocaleString()}</td>
+                    <td class="p-3 text-center w-28">
+                        <button onclick="startEditNovel('${n.id}')" class="text-yellow-600 bg-yellow-50 hover:bg-yellow-100 p-2 rounded mr-1 transition-colors" title="แก้ไข"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteNovel('${n.id}')" class="text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors" title="ลบ"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // นำชิ้นส่วนประกอบเข้าด้วยกัน
+            document.getElementById('admin-content').innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- ซ้าย: ฟอร์มจัดการนิยาย -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200" id="novel-form-section">${novelFormHtml}</div>
+                    
+                    <!-- ขวา: ฟอร์มเพิ่มตอน -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3"><i class="fa-solid fa-file-circle-plus text-green-600"></i> เพิ่มตอนใหม่ลงในนิยาย</h2>
+                        <form onsubmit="handleAddChapter(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-bold mb-1">เลือกนิยายเป้าหมาย</label>
+                                <select id="add_ch_novelId" required class="w-full border border-gray-300 rounded-lg p-2 bg-gray-50 outline-none focus:ring-2 focus:ring-green-500">
+                                    <option value="">-- คลิกลงมาเพื่อเลือกนิยาย --</option>
+                                    ${optionsHtml}
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="col-span-1">
+                                    <label class="block text-sm font-bold mb-1">ตอนที่</label>
+                                    <input type="number" id="add_ch_num" min="1" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500">
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-bold mb-1">ชื่อตอน</label>
+                                    <input type="text" id="add_ch_title" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1 flex justify-between">
+                                    <span>เนื้อหานิยาย</span>
+                                    <span class="text-xs text-gray-400 font-normal">กด Enter เพื่อขึ้นบรรทัดใหม่ได้เลย</span>
+                                </label>
+                                <textarea id="add_ch_content" rows="8" required class="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-green-500 font-serif leading-relaxed"></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors shadow-md">เผยแพร่ตอนใหม่</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ตารางรายการนิยาย -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-list text-indigo-600 mr-2"></i> รายการนิยายทั้งหมด (${novels.length} เรื่อง)</h2>
+                        <button onclick="loadData()" class="text-sm bg-white border border-gray-300 px-3 py-1.5 rounded-lg text-gray-600 hover:text-indigo-600 hover:border-indigo-400 font-medium transition-colors shadow-sm"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรชข้อมูล</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse min-w-[600px]">
+                            <thead>
+                                <tr class="bg-white border-b border-gray-200 text-gray-500 text-sm">
+                                    <th class="p-4 font-medium text-center w-16">ลำดับ</th>
+                                    <th class="p-4 font-medium">เรื่อง</th>
+                                    <th class="p-4 font-medium hidden sm:table-cell">ผู้แต่ง</th>
+                                    <th class="p-4 font-medium text-center hidden sm:table-cell">ยอดวิว</th>
+                                    <th class="p-4 font-medium text-center w-32">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>${novelTableHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- 3. ฟังก์ชันจัดการข้อมูล (Actions) ---
+
+        // เพิ่มนิยาย
+        window.handleAddNovel = function(e) {
+            e.preventDefault();
+            const newId = 'n' + Date.now();
+            const categories = document.getElementById('add_novel_cat').value.split(',').map(s => s.trim());
+            const newNovel = {
+                id: newId,
+                title: document.getElementById('add_novel_title').value,
+                author: document.getElementById('add_novel_author').value,
+                cover: document.getElementById('add_novel_cover').value,
+                categories: categories,
+                synopsis: document.getElementById('add_novel_synopsis').value,
+                views: 0, 
+                status: 'ยังไม่จบ'
+            };
+
+            // อัปเดตหน้าเว็บทันที
+            novels.unshift(newNovel); // เอาเรื่องใหม่ไว้บนสุด
+            e.target.reset();
+            render();
+
+            // ส่งคำสั่งไป Excel
+            syncToGoogleSheets({ action: 'addNovel', novel: newNovel });
+        }
+
+        // เริ่มแก้ไขนิยาย
+        window.startEditNovel = function(id) {
+            state.editingNovelId = id; 
+            render();
+            document.getElementById('novel-form-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ยกเลิกแก้ไข
+        window.cancelEditNovel = function() { 
+            state.editingNovelId = null; 
+            render(); 
+        }
+
+        // บันทึกแก้ไขนิยาย
+        window.handleUpdateNovel = function(e) {
+            e.preventDefault();
+            const target = novels.find(n => n.id === state.editingNovelId);
+            if(!target) return;
+
+            // ดึงค่าใหม่จากฟอร์ม
+            target.title = document.getElementById('edit_novel_title').value;
+            target.author = document.getElementById('edit_novel_author').value;
+            target.cover = document.getElementById('edit_novel_cover').value;
+            target.categories = document.getElementById('edit_novel_cat').value.split(',').map(s => s.trim());
+            target.status = document.getElementById('edit_novel_status').value;
+            target.synopsis = document.getElementById('edit_novel_synopsis').value;
+            
+            const updatedNovelData = {...target};
+            state.editingNovelId = null; 
+            render();
+
+            // ส่งคำสั่งไป Excel
+            syncToGoogleSheets({ action: 'updateNovel', id: target.id, novel: updatedNovelData });
+        }
+
+        // ลบนิยาย
+        window.deleteNovel = function(id) {
+            if (confirm('คำเตือน: แน่ใจหรือไม่ที่จะลบนิยายเรื่องนี้?\n(ตอนทั้งหมดของเรื่องนี้จะถูกลบออกไปพร้อมกันด้วย)')) {
+                // ลบออกจากตัวแปรในหน้าเว็บ
+                novels = novels.filter(n => n.id !== id);
+                chapters = chapters.filter(c => c.novelId !== id);
+                render();
+
+                // ส่งคำสั่งลบไป Excel
+                syncToGoogleSheets({ action: 'deleteNovel', id: id });
+            }
+        }
+
+        // เพิ่มตอนใหม่
+        window.handleAddChapter = function(e) {
+            e.preventDefault();
+            // จัดการแปลง Enter ให้เป็น <br> เพื่อขึ้นบรรทัดใหม่
+            const formattedContent = document.getElementById('add_ch_content').value.replace(/\n/g, '<br>');
+            const chId = 'c' + Date.now();
+            const newChapter = {
+                id: chId,
+                novelId: document.getElementById('add_ch_novelId').value,
+                chapterNumber: parseInt(document.getElementById('add_ch_num').value),
+                title: document.getElementById('add_ch_title').value,
+                content: formattedContent
+            };
+
+            chapters.push(newChapter);
+            
+            // แนะนำเลขตอนต่อไปให้โดยอัตโนมัติ
+            const nextChNum = newChapter.chapterNumber + 1;
+            e.target.reset();
+            document.getElementById('add_ch_num').value = nextChNum;
+            // ให้ยังคงเลือกเรื่องเดิมไว้ จะได้เพิ่มตอนรวดเดียวได้
+            document.getElementById('add_ch_novelId').value = newChapter.novelId;
+
+            // ส่งคำสั่งไป Excel
+            syncToGoogleSheets({ action: 'addChapter', chapter: newChapter });
+        }
+    </script>
+</body>
+</html>
