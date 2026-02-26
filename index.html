@@ -470,6 +470,10 @@
             };
             chapters.push(newChapter);
             state.editingChapterId = null;
+            
+            // ล้างข้อมูลในกล่องข้อความทันที
+            e.target.reset(); 
+            
             render();
             syncToGoogleSheets({ action: 'addChapter', chapter: newChapter });
         }
