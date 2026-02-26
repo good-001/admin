@@ -50,7 +50,9 @@
             view: 'dashboard', // 'dashboard' หรือ 'manage_chapters'
             editingNovelId: null,
             activeNovelId: null, 
-            editingChapterId: null 
+            editingChapterId: null,
+            chapterCurrentPage: 1, 
+            chapterItemsPerPage: 50 
         };
 
         // --- 1. โหลดข้อมูล ---
@@ -86,7 +88,6 @@
             
             toast.classList.remove('translate-y-20', 'opacity-0');
             
-            // รีเซ็ตตัวจับเวลาถ้ามีการกดซ้ำรัวๆ
             if (window.toastTimeout) clearTimeout(window.toastTimeout);
             window.toastTimeout = setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
         }
@@ -108,13 +109,14 @@
         }
 
         // --- 2. ฟังก์ชันวาดหน้าจอ (Router) ---
-        function render() {
+        function render(scrollToTop = true) {
             const container = document.getElementById('admin-content');
             if (state.view === 'dashboard') {
                 container.innerHTML = renderDashboard();
             } else if (state.view === 'manage_chapters') {
                 container.innerHTML = renderManageChapters();
             }
+            if(scrollToTop) window.scrollTo(0, 0);
         }
 
         // ==========================================
@@ -253,13 +255,38 @@
             // แปลง <br> กลับเป็นขึ้นบรรทัดใหม่สำหรับการแก้ไข
             const editContent = editingChapter ? editingChapter.content.replace(/<br>/g, '\n') : '';
 
+            // ---------------- Pagination Logic ----------------
+            const totalItems = novelChapters.length;
+            const totalPages = Math.ceil(totalItems / state.chapterItemsPerPage);
+            
+            if (state.chapterCurrentPage > totalPages && totalPages > 0) state.chapterCurrentPage = totalPages;
+            else if (state.chapterCurrentPage < 1) state.chapterCurrentPage = 1;
+
+            const startIndex = (state.chapterCurrentPage - 1) * state.chapterItemsPerPage;
+            const endIndex = startIndex + state.chapterItemsPerPage;
+            const paginatedChapters = novelChapters.slice(startIndex, endIndex);
+
+            // ---------------- HTML Upload TXT Box ----------------
+            const uploadBoxHtml = `
+                <div class="mb-4 p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 shadow-sm">
+                    <div>
+                        <div class="text-sm font-bold text-indigo-800"><i class="fa-solid fa-file-lines mr-1"></i> นำเข้าตอนจากไฟล์ .txt</div>
+                        <div class="text-xs text-indigo-600 mt-1">ระบบจะดึงเลขตอน ชื่อตอน และจัดบรรทัดให้อัตโนมัติ</div>
+                    </div>
+                    <input type="file" accept=".txt" onchange="handleTxtUpload(event)" class="text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
+                </div>
+            `;
+
             let chapterFormHtml = '';
             if (editMode && editingChapter) {
                 chapterFormHtml = `
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3 text-yellow-600"><i class="fa-solid fa-pen-to-square"></i> แก้ไขเนื้อหาตอนที่ ${editingChapter.chapterNumber}</h2>
+                    ${uploadBoxHtml}
                     <form onsubmit="handleUpdateChapter(event)" class="space-y-4">
-                        <div><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="edit_ch_num" value="${editingChapter.chapterNumber}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
-                        <div><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="edit_ch_title" value="${editingChapter.title}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="col-span-1"><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="edit_ch_num" value="${editingChapter.chapterNumber}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
+                            <div class="col-span-2"><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="edit_ch_title" value="${editingChapter.title}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
+                        </div>
                         <div>
                             <label class="block text-sm font-bold mb-2 flex justify-between items-center">
                                 <span>เนื้อหานิยาย</span>
@@ -278,9 +305,12 @@
             } else {
                 chapterFormHtml = `
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3"><i class="fa-solid fa-file-circle-plus text-green-600"></i> เพิ่มตอนใหม่</h2>
+                    ${uploadBoxHtml}
                     <form onsubmit="handleAddChapter(event)" class="space-y-4">
-                        <div><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="add_ch_num" value="${nextChNum}" min="1" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
-                        <div><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="add_ch_title" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="col-span-1"><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="add_ch_num" value="${nextChNum}" min="1" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
+                            <div class="col-span-2"><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="add_ch_title" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
+                        </div>
                         <div>
                             <label class="block text-sm font-bold mb-2 flex justify-between items-center">
                                 <span>เนื้อหานิยาย</span>
@@ -288,16 +318,16 @@
                                     <i class="fa-solid fa-wand-magic-sparkles"></i> จัดบรรทัดอัตโนมัติ
                                 </button>
                             </label>
-                            <textarea id="add_ch_content" rows="14" required class="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-green-500 font-serif leading-relaxed" placeholder="วางเนื้อหาที่นี่ แล้วกด 'จัดบรรทัดอัตโนมัติ' ด้านบนได้เลย..."></textarea>
+                            <textarea id="add_ch_content" rows="14" required class="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-green-500 font-serif leading-relaxed" placeholder="พิมพ์เอง หรือ อัปโหลดจากไฟล์ .txt ด้านบนได้เลย..."></textarea>
                         </div>
                         <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors shadow-md">เผยแพร่ตอนใหม่</button>
                     </form>
                 `;
             }
 
-            let chapterTableHtml = novelChapters.length === 0 
-                ? `<tr><td colspan="3" class="p-8 text-center text-gray-500">ยังไม่มีตอนในนิยายเรื่องนี้</td></tr>` 
-                : novelChapters.map(ch => `
+            let chapterTableHtml = paginatedChapters.length === 0 
+                ? `<tr><td colspan="3" class="p-8 text-center text-gray-500">ยังไม่มีตอนในนิยายเรื่องนี้ (หรือในหน้านี้)</td></tr>` 
+                : paginatedChapters.map(ch => `
                 <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td class="p-4 text-center font-bold text-gray-600 w-20">ตอนที่ ${ch.chapterNumber}</td>
                     <td class="p-4 font-medium text-gray-800">${ch.title}</td>
@@ -307,6 +337,43 @@
                     </td>
                 </tr>
             `).join('');
+
+            // Pagination UI
+            let paginationHtml = '';
+            if (totalPages > 1) {
+                let pageButtons = '';
+                let startPage = Math.max(1, state.chapterCurrentPage - 2);
+                let endPage = Math.min(totalPages, state.chapterCurrentPage + 2);
+
+                if (state.chapterCurrentPage > 1) {
+                    pageButtons += `<button onclick="changeChapterPage(${state.chapterCurrentPage - 1})" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm"><i class="fa-solid fa-chevron-left mr-1"></i> ก่อนหน้า</button>`;
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    if (i === state.chapterCurrentPage) {
+                        pageButtons += `<button class="px-3 py-1 bg-indigo-600 text-white border border-indigo-600 rounded text-sm font-bold shadow-sm">${i}</button>`;
+                    } else {
+                        pageButtons += `<button onclick="changeChapterPage(${i})" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm">${i}</button>`;
+                    }
+                }
+
+                if (state.chapterCurrentPage < totalPages) {
+                    pageButtons += `<button onclick="changeChapterPage(${state.chapterCurrentPage + 1})" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm">ถัดไป <i class="fa-solid fa-chevron-right ml-1"></i></button>`;
+                }
+
+                paginationHtml = `
+                    <div class="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-gray-200 bg-gray-50 gap-4">
+                        <div class="text-sm text-gray-500 font-medium">แสดง ${startIndex + 1} ถึง ${Math.min(endIndex, totalItems)} จากทั้งหมด ${totalItems} ตอน</div>
+                        <div class="flex gap-1 shadow-sm rounded">${pageButtons}</div>
+                    </div>
+                `;
+            } else if (totalItems > 0) {
+                 paginationHtml = `
+                    <div class="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
+                        <div class="text-sm text-gray-500 font-medium">แสดงทั้งหมด ${totalItems} ตอน</div>
+                    </div>
+                `;
+            }
 
             return `
                 <button onclick="goDashboard()" class="flex items-center gap-2 text-gray-500 hover:text-indigo-600 font-medium mb-6 transition-colors bg-white px-4 py-2 rounded-full shadow-sm w-fit border border-gray-100">
@@ -318,7 +385,7 @@
                     <img src="${novel.cover}" class="w-20 h-28 object-cover rounded-lg shadow-md" onerror="this.src='https://via.placeholder.com/150'">
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">${novel.title}</h1>
-                        <p class="text-gray-500"><i class="fa-solid fa-pen-nib mr-2"></i>ผู้แต่ง: ${novel.author} | มีทั้งหมด <span class="font-bold text-indigo-600">${novelChapters.length}</span> ตอน</p>
+                        <p class="text-gray-500"><i class="fa-solid fa-pen-nib mr-2"></i>ผู้แต่ง: ${novel.author} | มีทั้งหมด <span class="font-bold text-indigo-600">${totalItems}</span> ตอน</p>
                     </div>
                 </div>
 
@@ -329,11 +396,11 @@
                         </div>
                     </div>
                     <div class="lg:col-span-2">
-                        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                                <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-list-ul text-green-600 mr-2"></i> รายการตอนทั้งหมด</h2>
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center" id="chapter-list-section">
+                                <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-list-ul text-green-600 mr-2"></i> รายการตอน (หน้า ${state.chapterCurrentPage})</h2>
                             </div>
-                            <div class="overflow-x-auto max-h-[700px] overflow-y-auto">
+                            <div class="overflow-x-auto overflow-y-auto" style="max-h: 600px;">
                                 <table class="w-full text-left border-collapse">
                                     <thead class="sticky top-0 bg-white shadow-sm z-10">
                                         <tr class="border-b border-gray-200 text-gray-500 text-sm">
@@ -345,6 +412,7 @@
                                     <tbody>${chapterTableHtml}</tbody>
                                 </table>
                             </div>
+                            ${paginationHtml}
                         </div>
                     </div>
                 </div>
@@ -352,9 +420,69 @@
         }
 
         // ==========================================
-        // 3. ฟังก์ชันจัดรูปแบบเนื้อหาอัตโนมัติ (Auto Format)
+        // 3. ฟังก์ชันจัดรูปแบบและอัปโหลดเนื้อหา
         // ==========================================
-        window.autoFormatContent = function(textAreaId) {
+        
+        // ฟังก์ชันอ่านไฟล์ TXT อัตโนมัติ
+        window.handleTxtUpload = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                let text = e.target.result.trim();
+                
+                let chNum = '';
+                let title = '';
+                let content = text;
+
+                let lines = text.split('\n');
+                let firstLine = lines[0].trim();
+                
+                // ใช้ Regex จับคำว่า "บทที่" หรือ "ตอนที่" ตามด้วยตัวเลขและข้อความ
+                let matchPrefix = firstLine.match(/^(?:บทที่|ตอนที่)\s*(\d+)?\s*(.*)/);
+                
+                if (matchPrefix) {
+                    if (matchPrefix[1]) chNum = matchPrefix[1];
+                    
+                    let remainingFirstLine = matchPrefix[2].trim();
+                    
+                    // ถ้านิยายถูกก็อปมาวางเป็นบรรทัดเดียวพรืดๆ (ไม่มี Enter)
+                    if (lines.length === 1) {
+                        let spaceIndex = remainingFirstLine.indexOf(' ');
+                        if (spaceIndex !== -1) {
+                            title = remainingFirstLine.substring(0, spaceIndex).trim(); // เอาคำแรกเป็นชื่อตอน
+                            content = remainingFirstLine.substring(spaceIndex).trim();  // ที่เหลือเป็นเนื้อหา
+                        } else {
+                            title = remainingFirstLine;
+                            content = '';
+                        }
+                    } else {
+                        // ถ้ามีการจัดบรรทัดมาแล้ว ให้ถือว่าบรรทัดแรกที่เหลือคือชื่อตอน
+                        title = remainingFirstLine;
+                        content = lines.slice(1).join('\n').trim();
+                    }
+                }
+
+                const numInput = document.getElementById('add_ch_num') || document.getElementById('edit_ch_num');
+                const titleInput = document.getElementById('add_ch_title') || document.getElementById('edit_ch_title');
+                const contentInput = document.getElementById('add_ch_content') || document.getElementById('edit_ch_content');
+
+                if (numInput && chNum) numInput.value = chNum;
+                if (titleInput && title) titleInput.value = title;
+                if (contentInput) {
+                    contentInput.value = content;
+                    // ทำการกดจัดบรรทัดให้อัตโนมัติเลยทันที
+                    autoFormatContent(contentInput.id, false);
+                }
+                
+                showToast("อ่านไฟล์และจัดระเบียบเนื้อหาสำเร็จ!");
+                event.target.value = ''; // ล้างค่า input เพื่อให้อัปโหลดซ้ำได้
+            };
+            reader.readAsText(file, 'UTF-8'); 
+        }
+
+        window.autoFormatContent = function(textAreaId, notify = true) {
             const textarea = document.getElementById(textAreaId);
             if (!textarea) return;
             
@@ -364,7 +492,6 @@
             text = text.replace(/ {2,}/g, ' ');
 
             // 2. จับคู่ประโยคที่มีเครื่องหมายคำพูด ("..." หรือ “...”) แล้วตัดขึ้นบรรทัดใหม่
-            // หมายเหตุ: ใช้ Regex จับประโยคคำพูดทั้งหมดแล้วเติม \n ด้านหน้าและด้านหลัง
             text = text.replace(/(["“].*?["”])/g, '\n$1\n');
 
             // 3. จัดการบรรทัดว่างที่อาจซ้อนกันเกินไปให้เหลือแค่บรรทัดเดียว
@@ -373,16 +500,15 @@
             // 4. ตัดช่องว่างส่วนเกินที่ต้นบรรทัดและท้ายบรรทัดออก
             text = text.split('\n').map(line => line.trim()).join('\n');
 
-            // นำข้อความที่จัดแล้วใส่กลับไปในกล่อง
             textarea.value = text.trim();
-            showToast("จัดระเบียบเนื้อหาเรียบร้อย!");
+            if(notify) showToast("จัดระเบียบเนื้อหาเรียบร้อย!");
         }
 
 
         // ==========================================
         // 4. Actions - จัดการนิยาย (Novel)
         // ==========================================
-        function goDashboard() {
+        window.goDashboard = function() {
             state.view = 'dashboard';
             state.activeNovelId = null;
             state.editingNovelId = null;
@@ -394,7 +520,19 @@
             state.view = 'manage_chapters';
             state.activeNovelId = id;
             state.editingChapterId = null;
+            state.chapterCurrentPage = 1; // เริ่มที่หน้า 1 เสมอ
             render();
+        }
+
+        window.changeChapterPage = function(pageNumber) {
+            state.chapterCurrentPage = pageNumber;
+            render(false);
+            const chapterSection = document.getElementById('chapter-list-section');
+            if (chapterSection) {
+                const yOffset = -80; 
+                const y = chapterSection.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                window.scrollTo({top: y, behavior: 'smooth'});
+            }
         }
 
         window.handleAddNovel = function(e) {
@@ -455,7 +593,7 @@
             const formattedContent = document.getElementById('add_ch_content').value.replace(/\n/g, '<br>');
             const newChapter = {
                 id: 'c' + Date.now(),
-                novelId: state.activeNovelId, // ดึงไอดีจากเรื่องที่เลือกอยู่
+                novelId: state.activeNovelId, 
                 chapterNumber: parseInt(document.getElementById('add_ch_num').value),
                 title: document.getElementById('add_ch_title').value,
                 content: formattedContent
@@ -463,19 +601,21 @@
             chapters.push(newChapter);
             state.editingChapterId = null;
             
-            // ล้างฟอร์มหลังจากส่งข้อมูล
+            const novelChapters = chapters.filter(c => c.novelId === state.activeNovelId);
+            const totalPages = Math.ceil(novelChapters.length / state.chapterItemsPerPage);
+            state.chapterCurrentPage = totalPages; 
+            
             e.target.reset();
-
-            render();
+            render(false);
             syncToGoogleSheets({ action: 'addChapter', chapter: newChapter });
         }
 
         window.startEditChapter = function(id) {
-            state.editingChapterId = id; render();
-            document.getElementById('chapter-form-section').scrollIntoView({ behavior: 'smooth' });
+            state.editingChapterId = id; render(false);
+            document.getElementById('chapter-form-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
-        window.cancelEditChapter = function() { state.editingChapterId = null; render(); }
+        window.cancelEditChapter = function() { state.editingChapterId = null; render(false); }
 
         window.handleUpdateChapter = function(e) {
             e.preventDefault();
@@ -487,14 +627,14 @@
             target.content = document.getElementById('edit_ch_content').value.replace(/\n/g, '<br>');
             
             const payload = {...target};
-            state.editingChapterId = null; render();
+            state.editingChapterId = null; render(false);
             syncToGoogleSheets({ action: 'updateChapter', id: target.id, chapter: payload });
         }
 
         window.deleteChapter = function(id) {
             if (confirm('ลบตอนนี้นะครับ? (ไม่สามารถกู้คืนได้)')) {
                 chapters = chapters.filter(c => c.id !== id);
-                render();
+                render(false);
                 syncToGoogleSheets({ action: 'deleteChapter', id: id });
             }
         }
