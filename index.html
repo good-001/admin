@@ -78,13 +78,17 @@
         // แจ้งเตือน
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
-            // ลบบรรทัดที่เกิดปัญหาการตั้งค่า innerText ออกไป เพื่อไม่ให้ทับกับ innerHTML ด้านล่าง
+            if (!toast) return;
+            
             toast.innerHTML = isError 
                 ? `<i class="fa-solid fa-circle-xmark text-red-400"></i><span id="toast-msg">${msg}</span>`
                 : `<i class="fa-solid fa-circle-check text-green-400"></i><span id="toast-msg">${msg}</span>`;
             
             toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+            
+            // รีเซ็ตตัวจับเวลาถ้ามีการกดซ้ำรัวๆ
+            if (window.toastTimeout) clearTimeout(window.toastTimeout);
+            window.toastTimeout = setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
         }
 
         // ส่งข้อมูลไป Excel
@@ -127,21 +131,17 @@
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3 text-yellow-600"><i class="fa-solid fa-pen-to-square"></i> แก้ไขข้อมูลนิยาย</h2>
                     <form onsubmit="handleUpdateNovel(event)" class="space-y-4">
                         <div><label class="block text-sm font-bold text-gray-700 mb-1">ชื่อเรื่อง</label><input type="text" id="edit_n_title" value="${editingNovel.title}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">นามปากกา</label><input type="text" id="edit_n_author" value="${editingNovel.author}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1">สถานะ</label>
-                                <select id="edit_n_status" class="w-full border border-gray-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-yellow-500">
-                                    <option value="กำลังเผยแพร่" ${editingNovel.status === 'กำลังเผยแพร่' ? 'selected' : ''}>กำลังเผยแพร่</option>
-                                    <option value="หยุดเผยแพร่ชั่วคราว" ${editingNovel.status === 'หยุดเผยแพร่ชั่วคราว' ? 'selected' : ''}>หยุดเผยแพร่ชั่วคราว</option>
-                                    <option value="เสร็จสมบูรณ์แล้ว" ${editingNovel.status === 'เสร็จสมบูรณ์แล้ว' ? 'selected' : ''}>เสร็จสมบูรณ์แล้ว</option>
-                                </select>
-                            </div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">นามปากกา</label><input type="text" id="edit_n_author" value="${editingNovel.author}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">สถานะ</label>
+                            <select id="edit_n_status" class="w-full border border-gray-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-yellow-500">
+                                <option value="กำลังเผยแพร่" ${editingNovel.status === 'กำลังเผยแพร่' ? 'selected' : ''}>กำลังเผยแพร่</option>
+                                <option value="หยุดเผยแพร่ชั่วคราว" ${editingNovel.status === 'หยุดเผยแพร่ชั่วคราว' ? 'selected' : ''}>หยุดเผยแพร่ชั่วคราว</option>
+                                <option value="เสร็จสมบูรณ์แล้ว" ${editingNovel.status === 'เสร็จสมบูรณ์แล้ว' ? 'selected' : ''}>เสร็จสมบูรณ์แล้ว</option>
+                            </select>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">ลิงก์หน้าปก</label><input type="url" id="edit_n_cover" value="${editingNovel.cover}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">หมวดหมู่ (คั่นด้วยลูกน้ำ)</label><input type="text" id="edit_n_cat" value="${editingNovel.categories ? editingNovel.categories.join(', ') : ''}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
-                        </div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">ลิงก์หน้าปก</label><input type="url" id="edit_n_cover" value="${editingNovel.cover}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">หมวดหมู่ (คั่นด้วยลูกน้ำ)</label><input type="text" id="edit_n_cat" value="${editingNovel.categories ? editingNovel.categories.join(', ') : ''}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
                         <div><label class="block text-sm font-bold text-gray-700 mb-1">เรื่องย่อ</label><textarea id="edit_n_synopsis" rows="3" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500">${editingNovel.synopsis}</textarea></div>
                         <div class="flex gap-3 pt-2">
                             <button type="submit" class="flex-1 bg-yellow-500 text-white font-bold py-3 rounded-lg hover:bg-yellow-600 transition-colors shadow-md">บันทึกการแก้ไข</button>
@@ -155,21 +155,17 @@
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3"><i class="fa-solid fa-book-medical text-indigo-600"></i> เพิ่มนิยายเรื่องใหม่</h2>
                     <form onsubmit="handleAddNovel(event)" class="space-y-4">
                         <div><label class="block text-sm font-bold text-gray-700 mb-1">ชื่อเรื่อง</label><input type="text" id="add_n_title" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">นามปากกา</label><input type="text" id="add_n_author" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1">สถานะ</label>
-                                <select id="add_n_status" class="w-full border border-gray-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
-                                    <option value="กำลังเผยแพร่">กำลังเผยแพร่</option>
-                                    <option value="หยุดเผยแพร่ชั่วคราว">หยุดเผยแพร่ชั่วคราว</option>
-                                    <option value="เสร็จสมบูรณ์แล้ว">เสร็จสมบูรณ์แล้ว</option>
-                                </select>
-                            </div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">นามปากกา</label><input type="text" id="add_n_author" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">สถานะ</label>
+                            <select id="add_n_status" class="w-full border border-gray-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="กำลังเผยแพร่">กำลังเผยแพร่</option>
+                                <option value="หยุดเผยแพร่ชั่วคราว">หยุดเผยแพร่ชั่วคราว</option>
+                                <option value="เสร็จสมบูรณ์แล้ว">เสร็จสมบูรณ์แล้ว</option>
+                            </select>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">ลิงก์หน้าปก</label><input type="url" id="add_n_cover" placeholder="https://..." required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></div>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">หมวดหมู่ (คั่นด้วยลูกน้ำ)</label><input type="text" id="add_n_cat" placeholder="เช่น แฟนตาซี, ระบบ" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></div>
-                        </div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">ลิงก์หน้าปก</label><input type="url" id="add_n_cover" placeholder="https://..." required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">หมวดหมู่ (คั่นด้วยลูกน้ำ)</label><input type="text" id="add_n_cat" placeholder="เช่น แฟนตาซี, ระบบ" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></div>
                         <div><label class="block text-sm font-bold text-gray-700 mb-1">เรื่องย่อ</label><textarea id="add_n_synopsis" rows="3" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"></textarea></div>
                         <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors shadow-md">บันทึกนิยายเรื่องใหม่</button>
                     </form>
@@ -262,10 +258,8 @@
                 chapterFormHtml = `
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3 text-yellow-600"><i class="fa-solid fa-pen-to-square"></i> แก้ไขเนื้อหาตอนที่ ${editingChapter.chapterNumber}</h2>
                     <form onsubmit="handleUpdateChapter(event)" class="space-y-4">
-                        <div class="grid grid-cols-3 gap-4">
-                            <div class="col-span-1"><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="edit_ch_num" value="${editingChapter.chapterNumber}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
-                            <div class="col-span-2"><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="edit_ch_title" value="${editingChapter.title}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
-                        </div>
+                        <div><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="edit_ch_num" value="${editingChapter.chapterNumber}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
+                        <div><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="edit_ch_title" value="${editingChapter.title}" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-yellow-500"></div>
                         <div>
                             <label class="block text-sm font-bold mb-2 flex justify-between items-center">
                                 <span>เนื้อหานิยาย</span>
@@ -285,10 +279,8 @@
                 chapterFormHtml = `
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-3"><i class="fa-solid fa-file-circle-plus text-green-600"></i> เพิ่มตอนใหม่</h2>
                     <form onsubmit="handleAddChapter(event)" class="space-y-4">
-                        <div class="grid grid-cols-3 gap-4">
-                            <div class="col-span-1"><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="add_ch_num" value="${nextChNum}" min="1" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
-                            <div class="col-span-2"><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="add_ch_title" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
-                        </div>
+                        <div><label class="block text-sm font-bold mb-1">ตอนที่</label><input type="number" id="add_ch_num" value="${nextChNum}" min="1" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
+                        <div><label class="block text-sm font-bold mb-1">ชื่อตอน</label><input type="text" id="add_ch_title" required class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"></div>
                         <div>
                             <label class="block text-sm font-bold mb-2 flex justify-between items-center">
                                 <span>เนื้อหานิยาย</span>
