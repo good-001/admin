@@ -135,7 +135,8 @@
         // ==========================================
         function renderDashboard() {
             const editMode = state.editingNovelId !== null;
-            const editingNovel = editMode ? novels.find(n => n.id === state.editingNovelId) : null;
+            // 🌟 แก้ไข: ครอบ String() เพื่อป้องกันปัญหาชนิดข้อมูลไม่ตรงกัน
+            const editingNovel = editMode ? novels.find(n => String(n.id) === String(state.editingNovelId)) : null;
 
             let novelFormHtml = '';
             if (editMode && editingNovel) {
@@ -252,15 +253,16 @@
         // UI: หน้าจัดการตอน (เฉพาะเรื่องที่เลือก) 
         // ==========================================
         function renderManageChapters() {
-            const novel = novels.find(n => n.id === state.activeNovelId);
+            // 🌟 แก้ไข: ครอบ String()
+            const novel = novels.find(n => String(n.id) === String(state.activeNovelId));
             if (!novel) { goDashboard(); return ''; }
 
-            const novelChapters = chapters.filter(c => c.novelId === novel.id).sort((a, b) => a.chapterNumber - b.chapterNumber);
+            const novelChapters = chapters.filter(c => String(c.novelId) === String(novel.id)).sort((a, b) => a.chapterNumber - b.chapterNumber);
             
             const nextChNum = novelChapters.length > 0 ? Math.max(...novelChapters.map(c => c.chapterNumber)) + 1 : 1;
 
             const editMode = state.editingChapterId !== null;
-            const editingChapter = editMode ? chapters.find(c => c.id === state.editingChapterId) : null;
+            const editingChapter = editMode ? chapters.find(c => String(c.id) === String(state.editingChapterId)) : null;
             const editContent = editingChapter ? editingChapter.content.replace(/<br>/g, '\n') : '';
 
             // Pagination Logic 
@@ -514,7 +516,7 @@
 
         window.manageNovelChapters = function(id) {
             state.view = 'manage_chapters';
-            state.activeNovelId = id;
+            state.activeNovelId = String(id);
             state.editingChapterId = null;
             state.chapterCurrentPage = 1; 
             render();
@@ -550,7 +552,7 @@
         }
 
         window.startEditNovel = function(id) {
-            state.editingNovelId = id; render();
+            state.editingNovelId = String(id); render();
             document.getElementById('novel-form-section').scrollIntoView({ behavior: 'smooth' });
         }
 
@@ -558,7 +560,7 @@
 
         window.handleUpdateNovel = function(e) {
             e.preventDefault();
-            const target = novels.find(n => n.id === state.editingNovelId);
+            const target = novels.find(n => String(n.id) === String(state.editingNovelId));
             if(!target) return;
             target.title = document.getElementById('edit_n_title').value;
             target.author = document.getElementById('edit_n_author').value;
@@ -574,8 +576,9 @@
 
         window.deleteNovel = function(id) {
             if (confirm('คำเตือน: แน่ใจหรือไม่ที่จะลบนิยายเรื่องนี้?\n(ตอนทั้งหมดของเรื่องนี้จะถูกลบออกไปพร้อมกันด้วย)')) {
-                novels = novels.filter(n => n.id !== id);
-                chapters = chapters.filter(c => c.novelId !== id);
+                // 🌟 แก้ไขการลบโดยครอบ String
+                novels = novels.filter(n => String(n.id) !== String(id));
+                chapters = chapters.filter(c => String(c.novelId) !== String(id));
                 render();
                 syncToGoogleSheets({ action: 'deleteNovel', id: id });
             }
@@ -597,7 +600,7 @@
             chapters.push(newChapter);
             state.editingChapterId = null;
             
-            const novelChapters = chapters.filter(c => c.novelId === state.activeNovelId);
+            const novelChapters = chapters.filter(c => String(c.novelId) === String(state.activeNovelId));
             const totalPages = Math.ceil(novelChapters.length / state.chapterItemsPerPage);
             state.chapterCurrentPage = totalPages; 
             
@@ -607,7 +610,7 @@
         }
 
         window.startEditChapter = function(id) {
-            state.editingChapterId = id; render(false);
+            state.editingChapterId = String(id); render(false);
             document.getElementById('chapter-form-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
@@ -615,7 +618,7 @@
 
         window.handleUpdateChapter = function(e) {
             e.preventDefault();
-            const target = chapters.find(c => c.id === state.editingChapterId);
+            const target = chapters.find(c => String(c.id) === String(state.editingChapterId));
             if(!target) return;
             
             target.chapterNumber = parseInt(document.getElementById('edit_ch_num').value);
@@ -628,14 +631,14 @@
         }
 
         window.deleteChapter = function(id) {
-            // 🌟 ดึงข้อมูล "ชื่อตอน" ออกมาเตรียมไว้ส่งไป Excel 
-            const targetChapter = chapters.find(c => c.id === id);
+            // 🌟 แก้ไข: ดึงข้อมูลชื่อตอนได้สำเร็จแน่นอนเพราะครอบ String แล้ว
+            const targetChapter = chapters.find(c => String(c.id) === String(id));
             const chapterTitle = targetChapter ? targetChapter.title : "";
 
             if (confirm('ลบตอนนี้นะครับ? (ไม่สามารถกู้คืนได้)')) {
-                chapters = chapters.filter(c => c.id !== id);
+                // 🌟 ลบออกจากหน้าจอตารางได้ทันที
+                chapters = chapters.filter(c => String(c.id) !== String(id));
                 render(false);
-                // 🌟 ส่งค่า title ไปพร้อมกับไอดีด้วย เพื่อให้ Google Apps Script หาเจอและลบได้แน่นอน
                 syncToGoogleSheets({ action: 'deleteChapter', id: id, title: chapterTitle });
             }
         }
