@@ -99,20 +99,19 @@
             try {
                 showToast("กำลังซิงค์ข้อมูลกับ Excel...");
                 
+                // 🌟 ปรับปรุงการส่งข้อมูลให้เสถียรที่สุด ป้องกัน Browser ตัดข้อมูลทิ้งกลางทาง
                 const res = await fetch(GOOGLE_SHEET_API_URL, {
                     method: 'POST',
-                    // สำคัญมาก: ใช้ text/plain เพื่อป้องกันการบล็อก CORS ของ Browser
                     headers: {
-                        "Content-Type": "text/plain;charset=utf-8"
+                        "Content-Type": "application/x-www-form-urlencoded"
                     },
-                    body: JSON.stringify(payload)
+                    // แพ็คข้อมูลใส่กล่อง parameter ชื่อ payloadData
+                    body: "payloadData=" + encodeURIComponent(JSON.stringify(payload))
                 });
                 
                 const result = await res.json();
                 if(result.status === 'success') {
                     showToast("บันทึกข้อมูลสำเร็จ!");
-                    // โหลดข้อมูลใหม่เพื่อความชัวร์ว่าตรงกับ Excel
-                    // loadData(); 
                 } else {
                     showToast("เกิดข้อผิดพลาด: " + result.message, true);
                 }
