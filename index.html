@@ -47,7 +47,7 @@
         
         // สถานะของหน้าจอ
         let state = { 
-            view: 'dashboard', // 'dashboard' หรือ 'manage_chapters'
+            view: 'dashboard', 
             editingNovelId: null,
             activeNovelId: null, 
             editingChapterId: null,
@@ -58,7 +58,9 @@
         // --- 1. โหลดข้อมูล ---
         async function loadData() {
             try {
-                const res = await fetch(GOOGLE_SHEET_API_URL);
+                // เพิ่ม Parameter ?t=... ป้องกัน Browser จำ Cache เก่า
+                const urlWithNoCache = GOOGLE_SHEET_API_URL + "?t=" + new Date().getTime();
+                const res = await fetch(urlWithNoCache);
                 const data = await res.json();
                 
                 novels = data.novels.map(n => ({
@@ -68,7 +70,7 @@
                 }));
                 chapters = data.chapters || [];
                 
-                render();
+                render(false);
             } catch (err) {
                 console.error(err);
                 document.getElementById('loading-state').innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500 text-3xl mb-4"></i><br>เกิดข้อผิดพลาดในการโหลดข้อมูล';
@@ -95,15 +97,27 @@
         // ส่งข้อมูลไป Excel
         async function syncToGoogleSheets(payload) {
             try {
-                showToast("กำลังซิงค์ข้อมูล...");
+                showToast("กำลังซิงค์ข้อมูลกับ Excel...");
+                
                 const res = await fetch(GOOGLE_SHEET_API_URL, {
                     method: 'POST',
+                    // สำคัญมาก: ใช้ text/plain เพื่อป้องกันการบล็อก CORS ของ Browser
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8"
+                    },
                     body: JSON.stringify(payload)
                 });
+                
                 const result = await res.json();
-                if(result.status === 'success') showToast("บันทึกข้อมูลสำเร็จ!");
-                else showToast("เกิดข้อผิดพลาด: " + result.message, true);
+                if(result.status === 'success') {
+                    showToast("บันทึกข้อมูลสำเร็จ!");
+                    // โหลดข้อมูลใหม่เพื่อความชัวร์ว่าตรงกับ Excel
+                    // loadData(); 
+                } else {
+                    showToast("เกิดข้อผิดพลาด: " + result.message, true);
+                }
             } catch (e) {
+                console.error(e);
                 showToast("ซิงค์ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต", true);
             }
         }
@@ -205,18 +219,16 @@
 
             return `
                 <div class="flex flex-col gap-8 mb-8">
-                    <!-- ฟอร์มเพิ่มนิยายแบบเต็มจอ เรียงยาว -->
                     <div class="w-full">
                         <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200" id="novel-form-section">
                             ${novelFormHtml}
                         </div>
                     </div>
-                    <!-- ตารางแสดงนิยายแบบเต็มจอ -->
                     <div class="w-full">
                         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                             <div class="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                                 <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-layer-group text-indigo-600 mr-2"></i> รายการนิยาย (${novels.length} เรื่อง)</h2>
-                                <button onclick="loadData()" class="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg text-gray-600 hover:text-indigo-600 font-medium shadow-sm"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรช</button>
+                                <button onclick="loadData()" class="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg text-gray-600 hover:text-indigo-600 font-medium shadow-sm"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรชข้อมูล</button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left border-collapse min-w-[600px]">
@@ -262,7 +274,6 @@
             const endIndex = startIndex + state.chapterItemsPerPage;
             const paginatedChapters = novelChapters.slice(startIndex, endIndex);
 
-            // กล่องอัปโหลดไฟล์ TXT แบบเต็มบรรทัด
             const uploadBoxHtml = `
                 <div class="mb-6 p-5 bg-indigo-50 border border-indigo-100 rounded-xl flex flex-col gap-3 shadow-sm">
                     <div>
@@ -334,7 +345,6 @@
                 </tr>
             `).join('');
 
-            // Pagination UI
             let paginationHtml = '';
             if (totalPages > 1) {
                 let pageButtons = '';
@@ -376,7 +386,6 @@
                     <i class="fa-solid fa-arrow-left"></i> กลับหน้ารวมนิยาย
                 </button>
 
-                <!-- หัวเรื่องนิยาย -->
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8 mb-8 flex items-center gap-6 md:gap-8">
                     <img src="${novel.cover}" class="w-24 h-32 md:w-32 md:h-44 object-cover rounded-xl shadow-md" onerror="this.src='https://via.placeholder.com/150'">
                     <div>
@@ -386,18 +395,17 @@
                 </div>
 
                 <div class="flex flex-col gap-8 mb-8">
-                    <!-- ฟอร์มตอน เต็มจอแนวยาว -->
                     <div class="w-full">
                         <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200" id="chapter-form-section">
                             ${chapterFormHtml}
                         </div>
                     </div>
                     
-                    <!-- ตารางตอน เต็มจอแนวยาว -->
                     <div class="w-full">
                         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
                             <div class="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center" id="chapter-list-section">
                                 <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-list-ul text-green-600 mr-2"></i> รายการตอน (หน้า ${state.chapterCurrentPage})</h2>
+                                <button onclick="loadData()" class="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg text-gray-600 hover:text-indigo-600 font-medium shadow-sm"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรช</button>
                             </div>
                             <div class="overflow-x-auto overflow-y-auto" style="max-h: 800px;">
                                 <table class="w-full text-left border-collapse">
@@ -436,12 +444,10 @@
                 let lines = text.split('\n');
                 let firstLine = lines[0].trim();
                 
-                // ใช้ Regex จับคำว่า "บทที่" หรือ "ตอนที่" ตามด้วยตัวเลขและข้อความ
                 let matchPrefix = firstLine.match(/^(?:บทที่|ตอนที่)\s*(\d+)?\s*(.*)/);
                 
                 if (matchPrefix) {
                     if (matchPrefix[1]) chNum = matchPrefix[1];
-                    
                     let remainingFirstLine = matchPrefix[2].trim();
                     
                     if (lines.length === 1) {
