@@ -99,19 +99,21 @@
             try {
                 showToast("กำลังซิงค์ข้อมูลกับ Excel...");
                 
-                // 🌟 ปรับปรุงการส่งข้อมูลให้เสถียรที่สุด ป้องกัน Browser ตัดข้อมูลทิ้งกลางทาง
                 const res = await fetch(GOOGLE_SHEET_API_URL, {
                     method: 'POST',
+                    // กลับมาใช้ text/plain ซึ่งเป็นวิธีที่ Google Apps Script ยอมรับง่ายที่สุด
                     headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
+                        "Content-Type": "text/plain;charset=utf-8"
                     },
-                    // แพ็คข้อมูลใส่กล่อง parameter ชื่อ payloadData
-                    body: "payloadData=" + encodeURIComponent(JSON.stringify(payload))
+                    // ส่งข้อมูลแบบ JSON สดๆ ไปเลย
+                    body: JSON.stringify(payload)
                 });
                 
                 const result = await res.json();
                 if(result.status === 'success') {
                     showToast("บันทึกข้อมูลสำเร็จ!");
+                    // ถ้าสำเร็จ ให้โหลดข้อมูลใหม่มาแสดงทันที
+                    loadData();
                 } else {
                     showToast("เกิดข้อผิดพลาด: " + result.message, true);
                 }
