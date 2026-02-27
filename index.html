@@ -58,7 +58,7 @@
         // --- 1. โหลดข้อมูล ---
         async function loadData() {
             try {
-                // เพิ่ม Parameter ?t=... ป้องกัน Browser จำ Cache เก่า
+                // ป้องกัน Browser จำ Cache เก่า
                 const urlWithNoCache = GOOGLE_SHEET_API_URL + "?t=" + new Date().getTime();
                 const res = await fetch(urlWithNoCache);
                 const data = await res.json();
@@ -101,19 +101,15 @@
                 
                 const res = await fetch(GOOGLE_SHEET_API_URL, {
                     method: 'POST',
-                    // กลับมาใช้ text/plain ซึ่งเป็นวิธีที่ Google Apps Script ยอมรับง่ายที่สุด
                     headers: {
                         "Content-Type": "text/plain;charset=utf-8"
                     },
-                    // ส่งข้อมูลแบบ JSON สดๆ ไปเลย
                     body: JSON.stringify(payload)
                 });
                 
                 const result = await res.json();
                 if(result.status === 'success') {
                     showToast("บันทึกข้อมูลสำเร็จ!");
-                    // ถ้าสำเร็จ ให้โหลดข้อมูลใหม่มาแสดงทันที
-                    loadData();
                 } else {
                     showToast("เกิดข้อผิดพลาด: " + result.message, true);
                 }
@@ -220,16 +216,18 @@
 
             return `
                 <div class="flex flex-col gap-8 mb-8">
+                    <!-- ฟอร์มเพิ่มนิยายแบบเต็มจอ เรียงยาว -->
                     <div class="w-full">
                         <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200" id="novel-form-section">
                             ${novelFormHtml}
                         </div>
                     </div>
+                    <!-- ตารางแสดงนิยายแบบเต็มจอ -->
                     <div class="w-full">
                         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                             <div class="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                                 <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-layer-group text-indigo-600 mr-2"></i> รายการนิยาย (${novels.length} เรื่อง)</h2>
-                                <button onclick="loadData()" class="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg text-gray-600 hover:text-indigo-600 font-medium shadow-sm"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรชข้อมูล</button>
+                                <button onclick="loadData()" class="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg text-gray-600 hover:text-indigo-600 font-medium shadow-sm"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรช</button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left border-collapse min-w-[600px]">
@@ -275,6 +273,7 @@
             const endIndex = startIndex + state.chapterItemsPerPage;
             const paginatedChapters = novelChapters.slice(startIndex, endIndex);
 
+            // กล่องอัปโหลดไฟล์ TXT แบบเต็มบรรทัด
             const uploadBoxHtml = `
                 <div class="mb-6 p-5 bg-indigo-50 border border-indigo-100 rounded-xl flex flex-col gap-3 shadow-sm">
                     <div>
@@ -346,6 +345,7 @@
                 </tr>
             `).join('');
 
+            // Pagination UI
             let paginationHtml = '';
             if (totalPages > 1) {
                 let pageButtons = '';
@@ -387,6 +387,7 @@
                     <i class="fa-solid fa-arrow-left"></i> กลับหน้ารวมนิยาย
                 </button>
 
+                <!-- หัวเรื่องนิยาย -->
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8 mb-8 flex items-center gap-6 md:gap-8">
                     <img src="${novel.cover}" class="w-24 h-32 md:w-32 md:h-44 object-cover rounded-xl shadow-md" onerror="this.src='https://via.placeholder.com/150'">
                     <div>
@@ -396,12 +397,14 @@
                 </div>
 
                 <div class="flex flex-col gap-8 mb-8">
+                    <!-- ฟอร์มตอน เต็มจอแนวยาว -->
                     <div class="w-full">
                         <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200" id="chapter-form-section">
                             ${chapterFormHtml}
                         </div>
                     </div>
                     
+                    <!-- ตารางตอน เต็มจอแนวยาว -->
                     <div class="w-full">
                         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
                             <div class="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center" id="chapter-list-section">
@@ -625,10 +628,15 @@
         }
 
         window.deleteChapter = function(id) {
+            // 🌟 ดึงข้อมูล "ชื่อตอน" ออกมาเตรียมไว้ส่งไป Excel 
+            const targetChapter = chapters.find(c => c.id === id);
+            const chapterTitle = targetChapter ? targetChapter.title : "";
+
             if (confirm('ลบตอนนี้นะครับ? (ไม่สามารถกู้คืนได้)')) {
                 chapters = chapters.filter(c => c.id !== id);
                 render(false);
-                syncToGoogleSheets({ action: 'deleteChapter', id: id });
+                // 🌟 ส่งค่า title ไปพร้อมกับไอดีด้วย เพื่อให้ Google Apps Script หาเจอและลบได้แน่นอน
+                syncToGoogleSheets({ action: 'deleteChapter', id: id, title: chapterTitle });
             }
         }
     </script>
